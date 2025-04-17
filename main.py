@@ -236,21 +236,35 @@ def format_problem_text(sections: dict) -> str:
 
 # 코드 실행
 @app.post("/run-code")
-async def run_code(problem_dir: str = Form(...), language: str = Form(...)):
+async def run_code(
+    problem_dir: str = Form(...),
+    language: str = Form(...),
+    problem_number: str = Form(...),
+    code: str = Form(...)
+):
     try:
-        # 실행 명령 설정
+        # 문제 번호 디렉토리 경로 구성
+        full_problem_dir = os.path.join(problem_dir, problem_number)
+        
+        # 코드를 파일에 저장
         if language.lower() == 'python':
-            cmd = ['python', 'main.py']
+            source_file = os.path.join(full_problem_dir, 'main.py')
+            with open(source_file, 'w', encoding='utf-8') as f:
+                f.write(code)
+            cmd = ['python3', 'main.py']
         elif language.lower() == 'rust':
+            source_file = os.path.join(full_problem_dir, 'main.rs')
+            with open(source_file, 'w', encoding='utf-8') as f:
+                f.write(code)
             # Rust 코드 컴파일
             compile_cmd = ['rustc', 'main.rs']
-            subprocess.run(compile_cmd, cwd=problem_dir, check=True)
+            subprocess.run(compile_cmd, cwd=full_problem_dir, check=True)
             cmd = ['./main']
         else:
             return {"status": "error", "message": "지원하지 않는 프로그래밍 언어입니다."}
         
         # 입력 파일 읽기
-        input_path = os.path.join(problem_dir, 'input.txt')
+        input_path = os.path.join(full_problem_dir, 'input.txt')
         with open(input_path, 'r') as f:
             input_data = f.read()
         
@@ -260,15 +274,14 @@ async def run_code(problem_dir: str = Form(...), language: str = Form(...)):
             input=input_data,
             capture_output=True,
             text=True,
-            cwd=problem_dir
+            cwd=full_problem_dir
         )
         
-        # 출력 저장
-        output_path = os.path.join(problem_dir, 'output.txt')
-        with open(output_path, 'w') as f:
-            f.write(process.stdout)
-        
-        return {"status": "success", "message": "코드가 성공적으로 실행되었습니다."}
+        return {
+            "status": "success",
+            "message": "코드가 성공적으로 실행되었습니다.",
+            "output": process.stdout
+        }
     
     except Exception as e:
         return {"status": "error", "message": f"코드 실행 중 오류 발생: {str(e)}"}

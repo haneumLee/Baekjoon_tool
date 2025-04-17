@@ -506,6 +506,7 @@
         async function runCode() {
             const problemDir = document.getElementById('save-directory').value;
             const language = document.getElementById('language-select').value;
+            const problemNumber = document.getElementById('problem-number').value;
             const code = window.editor.getValue();
 
             document.getElementById('execution-status').className = 'status';
@@ -520,6 +521,7 @@
                     body: new URLSearchParams({
                         problem_dir: problemDir,
                         language: language,
+                        problem_number: problemNumber,
                         code: code
                     })
                 });
@@ -527,7 +529,8 @@
                 const result = await response.json();
                 const endTime = performance.now();
                 
-                document.getElementById('execution-result').textContent = result.output || result.message;
+                // 실행 결과를 화면에 표시
+                document.getElementById('execution-result').textContent = result.output || '';
                 
                 if (result.status === 'success') {
                     document.getElementById('execution-status').className = 'status status-success';
@@ -535,6 +538,8 @@
                 } else {
                     document.getElementById('execution-status').className = 'status status-error';
                     document.getElementById('execution-status').textContent = '실패';
+                    // 에러 메시지도 실행 결과에 표시
+                    document.getElementById('execution-result').textContent = result.message;
                 }
             } catch (error) {
                 document.getElementById('execution-status').className = 'status status-error';
