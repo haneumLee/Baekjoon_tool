@@ -33,9 +33,11 @@ async def read_root(request: Request):
 @app.post("/set-save-directory")
 async def set_save_directory(directory: str = Form(...)):
     try:
-        directory = os.path.expanduser(directory)
-        os.makedirs(directory, exist_ok=True)
-        SETTINGS["save_directory"] = directory
+        # 절대 경로로 변환
+        abs_path = os.path.abspath(directory)
+        # 디렉토리가 없으면 생성
+        os.makedirs(abs_path, exist_ok=True)
+        SETTINGS["save_directory"] = abs_path
         save_settings(SETTINGS)
         return {"status": "success", "message": "저장 경로가 설정되었습니다."}
     except Exception as e:
@@ -43,38 +45,48 @@ async def set_save_directory(directory: str = Form(...)):
 
 # 문제 처리
 @app.post("/process-problem")
-async def process_problem(problem_text: str = Form(...), language: str = Form(...)):
+async def process_problem(
+    problem_text: str = Form(...),
+    language: str = Form(...),
+    problem_number: str = Form(...),
+    save_directory: str = Form(...)
+):
     try:
         # 문제 텍스트 파싱
         sections = parse_problem_text(problem_text)
         
-        # 문제 번호 추출 (첫 줄에서 추출)
-        problem_number = extract_problem_number(sections.get("제목", ""))
-        if not problem_number:
-            return {"status": "error", "message": "문제 번호를 찾을 수 없습니다."}
-        
         # 디렉토리 생성
-        problem_dir = os.path.join(SETTINGS["save_directory"], problem_number)
+        problem_dir = os.path.join(save_directory, problem_number)
         os.makedirs(problem_dir, exist_ok=True)
-        
-        # README.md 생성
+
+        # README.md 파일 생성
         create_readme(problem_dir, sections)
-        
-        # 입력 예제 파일 생성
-        if sections.get("예제 입력 1"):
-            with open(os.path.join(problem_dir, 'input.txt'), 'w', encoding='utf-8') as f:
-                f.write(sections["예제 입력 1"])
-        
-        # 출력 예제 파일 생성
-        if sections.get("예제 출력 1"):
-            with open(os.path.join(problem_dir, 'expected_output.txt'), 'w', encoding='utf-8') as f:
-                f.write(sections["예제 출력 1"])
         
         # 소스 코드 템플릿 생성
         create_source_template(problem_dir, language)
         
-        return {"status": "success", "message": "문제가 성공적으로 처리되었습니다."}
-    
+        # 예제 입력/출력 파일 생성
+        example_input = sections.get("예제 입력 1", "")
+        example_output = sections.get("예제 출력 1", "")
+        
+        if example_input:
+            with open(os.path.join(problem_dir, "input.txt"), "w", encoding="utf-8") as f:
+                f.write(example_input)
+        
+        if example_output:
+            with open(os.path.join(problem_dir, "output.txt"), "w", encoding="utf-8") as f:
+                f.write(example_output)
+        
+        # 섹션 이름이 포함된 형식으로 문제 텍스트 생성
+        formatted_text = format_problem_text(sections)
+        
+        return {
+            "status": "success",
+            "message": "문제 파일이 성공적으로 생성되었습니다.",
+            "formatted_text": formatted_text,
+            "example_input": example_input,
+            "example_output": example_output
+        }
     except Exception as e:
         return {"status": "error", "message": f"문제 처리 중 오류 발생: {str(e)}"}
 
@@ -86,7 +98,14 @@ def parse_problem_text(text: str) -> dict:
     
     for line in text.split('\n'):
         line = line.strip()
-        if line in ["문제", "입력", "출력", "예제 입력 1", "예제 출력 1"]:
+        # 예제 입력/출력 여러 개 처리
+        if line.startswith("예제 입력") or line.startswith("예제 출력"):
+            # 이전 섹션 저장
+            if current_content:
+                sections[current_section] = '\n'.join(current_content).strip()
+            current_section = line
+            current_content = []
+        elif line in ["문제", "입력", "출력"]:
             # 이전 섹션 저장
             if current_content:
                 sections[current_section] = '\n'.join(current_content).strip()
@@ -109,23 +128,51 @@ def extract_problem_number(title: str) -> str:
 
 def create_readme(problem_dir: str, sections: dict):
     """README.md 파일 생성"""
-    readme_content = f"""# {sections.get("제목", "")}
-
-## 문제
-{sections.get("문제", "")}
-
-## 입력
-{sections.get("입력", "")}
-
-## 출력
-{sections.get("출력", "")}
-
-## 예제 입력 1
-{sections.get("예제 입력 1", "")}
-
-## 예제 출력 1
-{sections.get("예제 출력 1", "")}
-"""
+    # 기본 섹션 생성
+    content_parts = [
+        f"# 백준 {sections.get('제목', '')}\n",
+        "## 문제 설명",
+        f"{sections.get('문제', '')}\n",
+        "## 입력 조건",
+        f"{sections.get('입력', '')}\n",
+        "## 출력 조건",
+        f"{sections.get('출력', '')}\n"
+    ]
+    
+    # 예제 입력/출력 쌍 찾기
+    example_pairs = []
+    example_num = 1
+    while True:
+        input_key = f"예제 입력 {example_num}"
+        output_key = f"예제 출력 {example_num}"
+        
+        if input_key not in sections or output_key not in sections:
+            break
+            
+        example_pairs.append((
+            sections[input_key],
+            sections[output_key],
+            example_num
+        ))
+        example_num += 1
+    
+    # 예제가 있으면 추가
+    if example_pairs:
+        content_parts.append("## 입력 예제")
+        for input_text, _, num in example_pairs:
+            content_parts.extend([
+                f"[예제 {num}]",
+                f"{input_text}\n"
+            ])
+            
+        content_parts.append("## 출력 예제")
+        for _, output_text, num in example_pairs:
+            content_parts.extend([
+                f"[예제 {num}]",
+                f"{output_text}\n"
+            ])
+    
+    readme_content = '\n'.join(content_parts)
     
     with open(os.path.join(problem_dir, 'README.md'), 'w', encoding='utf-8') as f:
         f.write(readme_content)
@@ -151,6 +198,41 @@ if __name__ == "__main__":
     
     with open(os.path.join(problem_dir, filename), 'w', encoding='utf-8') as f:
         f.write(template)
+
+def format_problem_text(sections: dict) -> str:
+    """섹션 이름이 포함된 문제 텍스트 생성"""
+    content_parts = []
+    
+    # 기본 섹션 순서
+    basic_sections = ["문제", "입력", "출력"]
+    for section in basic_sections:
+        if section in sections:
+            content_parts.extend([
+                f"## {section}",
+                sections[section],
+                ""  # 빈 줄 추가
+            ])
+    
+    # 예제 입력/출력 쌍 찾기
+    example_num = 1
+    while True:
+        input_key = f"예제 입력 {example_num}"
+        output_key = f"예제 출력 {example_num}"
+        
+        if input_key not in sections or output_key not in sections:
+            break
+            
+        content_parts.extend([
+            f"## {input_key}",
+            sections[input_key],
+            "",
+            f"## {output_key}",
+            sections[output_key],
+            ""
+        ])
+        example_num += 1
+    
+    return '\n'.join(content_parts)
 
 # 코드 실행
 @app.post("/run-code")
@@ -237,6 +319,33 @@ if __name__ == "__main__":
 """)
 
         return {"status": "success", "message": "파일이 성공적으로 생성되었습니다."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/get-full-path")
+async def get_full_path(request: Request):
+    try:
+        data = await request.json()
+        selected_dir = data.get("selected_dir")
+        if not selected_dir:
+            return {"status": "error", "message": "선택된 디렉토리 정보가 없습니다."}
+
+        # 현재 작업 디렉토리를 기준으로 전체 경로 생성
+        base_dir = os.path.dirname(os.path.abspath(__file__))  # 현재 스크립트의 디렉토리
+        full_path = os.path.abspath(os.path.join(base_dir, selected_dir))
+        
+        # 디렉토리가 존재하지 않으면 생성
+        os.makedirs(full_path, exist_ok=True)
+        
+        # settings.json 업데이트
+        SETTINGS["save_directory"] = full_path
+        save_settings(SETTINGS)
+        
+        return {
+            "status": "success",
+            "full_path": full_path,
+            "message": "디렉토리가 성공적으로 설정되었습니다."
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

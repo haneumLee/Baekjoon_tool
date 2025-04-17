@@ -221,3 +221,15 @@ async function setSaveDirectory() {
         alert('오류가 발생했습니다: ' + error);
     }
 }
+
+document.getElementById('directoryPicker').addEventListener('change', function(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        const file = files[0];
+        const path = file.path || file.webkitRelativePath;
+        if (path) {
+            const directoryPath = path.split('/').slice(0, -1).join('/');
+            document.getElementById('saveDirectory').value = directoryPath;
+        }
+    }
+});

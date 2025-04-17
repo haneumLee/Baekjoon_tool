@@ -2,11 +2,11 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
+  <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>백준 IDE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
-    <style>
+  <style>
         :root {
             --primary-color: #007bff;
             --secondary-color: #6c757d;
@@ -200,7 +200,7 @@
             background-color: white;
             margin-bottom: 1rem;
         }
-    </style>
+  </style>
 </head>
 <body>
     <div class="container">
@@ -213,8 +213,8 @@
             <div class="section">
                 <div class="section-title">저장 경로</div>
                 <div class="input-group">
-                    <input type="text" class="input-field" id="save-directory" placeholder="저장할 경로를 입력하세요">
-                    <button class="btn btn-secondary" onclick="setSaveDirectory()">불러오기</button>
+                    <input type="text" id="save-directory" class="input-field" readonly placeholder="저장 경로를 선택하세요" value="{{ save_directory }}">
+                    <button onclick="openDirectoryPicker()" class="btn btn-secondary">불러오기</button>
                 </div>
             </div>
             
@@ -244,25 +244,28 @@
         <!-- 중앙 패널 - 문제 입력 -->
         <div class="center-panel">
             <div class="section">
+                <div class="section-title">언어 선택</div>
+                <select class="dropdown" id="language-select">
+                    <option value="python">Python</option>
+                    <option value="rust">Rust</option>
+      </select>
+            </div>
+
+            <div class="section">
                 <div class="section-title">문제 번호</div>
                 <input type="text" class="input-field" id="problem-number" placeholder="문제 번호">
             </div>
 
             <div class="section">
                 <div class="section-title">문제 입력</div>
-                <textarea class="problem-input" id="problem-text" placeholder="여기에 문제를 붙여넣으세요"></textarea>
+                <textarea class="problem-input" id="problem-text" style="height: 50vh;" placeholder="여기에 문제를 붙여넣으세요"></textarea>
             </div>
 
             <div class="section">
                 <button class="btn btn-primary" onclick="startProblem()">문제풀이 시작</button>
             </div>
 
-            <div class="section">
-                <select class="dropdown" id="language-select">
-                    <option value="python">Python</option>
-                    <option value="rust">Rust</option>
-                </select>
-            </div>
+            
         </div>
         
         <!-- 오른쪽 패널 - 코드 에디터 및 실행 결과 -->
@@ -292,8 +295,8 @@
                 <div class="result-container" id="execution-result"></div>
             </div>
         </div>
-    </div>
-    
+  </div>
+
     <script>
         // Monaco Editor 설정
         require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
@@ -308,24 +311,42 @@
         });
 
         // 저장 경로 설정
-        async function setSaveDirectory() {
-            const directory = document.getElementById('save-directory').value;
-            if (!directory) {
-                alert('저장 경로를 입력해주세요.');
-                return;
-            }
-
+        async function openDirectoryPicker() {
             try {
-                const response = await fetch('/set-save-directory', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ directory })
+                const dirHandle = await window.showDirectoryPicker({
+                    mode: 'readwrite',
+                    startIn: 'documents'
                 });
                 
-                const result = await response.json();
-                alert(result.message);
-            } catch (error) {
-                alert('저장 경로 설정 중 오류가 발생했습니다: ' + error.message);
+                // 서버에 선택된 디렉토리 정보 전송
+                const response = await fetch('/get-full-path', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        selected_dir: dirHandle.name
+                    })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    document.getElementById('save-directory').value = data.full_path;
+                    // 성공 메시지를 alert 대신 더 부드러운 방식으로 표시
+                    const saveDirectoryInput = document.getElementById('save-directory');
+                    saveDirectoryInput.style.backgroundColor = '#e8f5e9';
+                    setTimeout(() => {
+                        saveDirectoryInput.style.backgroundColor = '';
+                    }, 2000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return;
+                }
+                console.error('디렉토리 선택 오류:', err);
+                alert("폴더 선택 중 오류가 발생했습니다. 다시 시도해주세요.");
             }
         }
 
@@ -441,60 +462,40 @@
             }
 
             if (!saveDirectory) {
-                alert('저장 경로를 설정해주세요.');
+                alert('저장 경로를 선택해주세요.');
                 return;
             }
 
             try {
-                // 문제 텍스트 파싱
-                const sections = parseProblemText(problemText);
-                
-                // 필요한 섹션만 남기고 문제 텍스트 업데이트
-                const cleanedText = [
-                    sections['시간 제한'],
-                    sections['문제'],
-                    sections['입력'],
-                    sections['출력']
-                ].filter(Boolean).join('\n\n');
-                
-                document.getElementById('problem-text').value = cleanedText;
-
-                // 예제 입출력 처리
-                let exampleInputs = [];
-                let exampleOutputs = [];
-                let i = 1;
-                
-                while (sections[`예제 입력 ${i}`] || sections[`예제 출력 ${i}`]) {
-                    if (sections[`예제 입력 ${i}`]) {
-                        exampleInputs.push(`[예제 ${i}]\n${sections[`예제 입력 ${i}`]}`);
-                    }
-                    if (sections[`예제 출력 ${i}`]) {
-                        exampleOutputs.push(`[예제 ${i}]\n${sections[`예제 출력 ${i}`]}`);
-                    }
-                    i++;
-                }
-
-                document.getElementById('example-input').value = exampleInputs.join('\n\n');
-                document.getElementById('example-output').value = exampleOutputs.join('\n\n');
-
-                // 파일 생성 요청
-                const response = await fetch('/create-problem-files', {
+                const response = await fetch('/process-problem', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
                         problem_number: problemNumber,
-                        problem_text: cleanedText,
-                        example_input: exampleInputs.join('\n\n'),
-                        example_output: exampleOutputs.join('\n\n'),
+                        problem_text: problemText,
+                        language: language,
                         save_directory: saveDirectory
                     })
                 });
 
                 const result = await response.json();
                 if (result.status === 'success') {
-                    alert('문제 파일이 생성되었습니다.');
-                } else {
+                    // 섹션 이름이 포함된 형식으로 문제 텍스트 업데이트
+                    document.getElementById('problem-text').value = result.formatted_text;
+                    
+                    // 예제 입력/출력 업데이트
+                    if (result.example_input) {
+                        document.getElementById('example-input').value = result.example_input;
+                    }
+                    if (result.example_output) {
+                        document.getElementById('example-output').value = result.example_output;
+                    }
+                    
                     alert(result.message);
+                } else {
+                    throw new Error(result.message);
                 }
             } catch (error) {
                 alert('문제 처리 중 오류가 발생했습니다: ' + error.message);
