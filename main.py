@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +9,7 @@ import uvicorn
 import os
 import sys
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import shutil
 
@@ -57,19 +57,9 @@ async def fetch_problem(problem_url: str = Form(...), language: str = Form(...))
         os.makedirs(problem_dir, exist_ok=True)
         print(f"2. 문제 디렉토리 생성: {problem_dir}")
         
-        # 요청 헤더 설정
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://acmicpc.net/',
-            'Connection': 'keep-alive',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-        }
-        
-        # HTTP GET 요청
-        response = requests.get(problem_url, headers=headers)
+        # HTTP GET 요청 using cloudscraper
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(problem_url)
         print(f"3. HTTP 상태 코드: {response.status_code}")
         
         if response.status_code != 200:
@@ -85,6 +75,9 @@ async def fetch_problem(problem_url: str = Form(...), language: str = Form(...))
         print(f"- description section 존재: {soup.select_one('section#description') is not None}")
         print(f"- problem_title span 존재: {soup.select_one('span#problem_title') is not None}")
         print(f"- 페이지 제목: {soup.title.string if soup.title else 'None'}")
+        
+        print("전체 HTML 구조 디버깅 (상위 1000자):")
+        print(response.text[:1000])
         
         # 문제 제목 찾기
         title_element = soup.select_one('#problem_title')
@@ -111,7 +104,7 @@ async def fetch_problem(problem_url: str = Form(...), language: str = Form(...))
                     title = title.replace(problem_number_text, "").strip()
                 problem_title = title
             else:
-                problem_title = "제목을 찾을 수 없음"
+                problem_title = soup.title.string.strip() if soup.title else "제목을 찾을 수 없음"
         else:
             problem_title = title_element.text.strip()
         
@@ -189,9 +182,7 @@ async def fetch_problem(problem_url: str = Form(...), language: str = Form(...))
                     output_description = content
         
         if not problem_description:
-            print("8. HTML 구조:")
-            print(soup.prettify()[:1000])
-            raise ValueError("Could not find problem description")
+            print("경고: 문제 설명을 찾을 수 없음. README에는 빈값으로 저장됩니다.")
         
         # 예제 입력/출력 찾기
         sample_inputs = []
