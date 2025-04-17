@@ -1,0 +1,31 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Baekjoon Tool</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.41.0/min/vs/loader.min.js"></script>
+  <script src="/static/editor.js" defer></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; }
+    #top-bar { padding: 10px; background-color: #eee; display: flex; gap: 1em; align-items: center; }
+    #editor { height: 400px; width: 100%; }
+    #output { height: 200px; background: black; color: lime; padding: 10px; font-family: monospace; overflow-y: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="top-bar">
+    <label>문제번호: <input type="text" id="problem-id"></label>
+    <label>언어:
+      <select id="language">
+        <option value="py">Python</option>
+        <option value="rs">Rust</option>
+      </select>
+    </label>
+    <button id="run-button">실행</button>
+  </div>
+
+  <div id="editor"></div>
+  <div id="output"></div>
+</body>
+</html>
