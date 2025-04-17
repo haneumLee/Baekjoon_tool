@@ -1,31 +1,56 @@
 <!-- templates/index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>Baekjoon Tool</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.41.0/min/vs/loader.min.js"></script>
-  <script src="/static/editor.js" defer></script>
-  <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; }
-    #top-bar { padding: 10px; background-color: #eee; display: flex; gap: 1em; align-items: center; }
-    #editor { height: 400px; width: 100%; }
-    #output { height: 200px; background: black; color: lime; padding: 10px; font-family: monospace; overflow-y: auto; white-space: pre-wrap; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>백준 IDE</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-  <div id="top-bar">
-    <label>문제번호: <input type="text" id="problem-id"></label>
-    <label>언어:
-      <select id="language">
-        <option value="py">Python</option>
-        <option value="rs">Rust</option>
-      </select>
-    </label>
-    <button id="run-button">실행</button>
-  </div>
-
-  <div id="editor"></div>
-  <div id="output"></div>
+    <div class="container">
+        <div class="left-panel">
+            <h1>백준 IDE</h1>
+            <div class="controls">
+                <div class="save-directory-section">
+                    <input type="text" id="save-directory" placeholder="저장 경로 (기본: problems)" readonly>
+                    <button onclick="openDirectoryPicker()">저장 경로 설정</button>
+                </div>
+                <input type="text" id="problem-url" placeholder="백준 문제 URL">
+                <select id="language-select">
+                    <option value="python">Python</option>
+                    <option value="rust">Rust</option>
+                </select>
+                <button onclick="fetchProblem()">문제 가져오기</button>
+            </div>
+            <div class="problem-info">
+                <h2>문제 정보</h2>
+                <div id="problem-content"></div>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="editor-container">
+                <div id="monaco-editor"></div>
+            </div>
+            <div class="input-output">
+                <div class="input-section">
+                    <h3>입력</h3>
+                    <textarea id="input-area"></textarea>
+                </div>
+                <div class="output-section">
+                    <h3>출력</h3>
+                    <div id="output-area"></div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button onclick="runCode()">실행</button>
+                <button onclick="checkAnswer()">정답 확인</button>
+                <button onclick="submitCode()">제출</button>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', path='/editor.js') }}"></script>
 </body>
 </html>
