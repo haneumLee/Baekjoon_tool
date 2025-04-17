@@ -5,52 +5,588 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>백준 IDE</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --border-color: #ddd;
+            --background-color: #f8f9fa;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 250px 1fr 2fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 왼쪽 패널 - 설정 및 연동 */
+        .left-panel {
+            background-color: #f8f9fa;
+            border-right: 1px solid var(--border-color);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        /* 중앙 패널 - 문제 입력 */
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-right: 1px solid var(--border-color);
+            padding: 1rem;
+        }
+        
+        /* 오른쪽 패널 - 코드 에디터 및 실행 결과 */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+            overflow-y: auto;
+        }
+        
+        /* 버튼 스타일 */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        /* 입력 필드 스타일 */
+        .input-field {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        /* 문제 입력 영역 */
+        .problem-input {
+            width: 100%;
+            height: 300px;
+            resize: vertical;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: monospace;
+            margin-bottom: 1rem;
+        }
+        
+        /* 섹션 스타일 */
+        .section {
+            margin-bottom: 1rem;
+        }
+        
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: var(--secondary-color);
+        }
+        
+        /* 예제 입출력 영역 */
+        .example-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .example-box {
+            flex: 1;
+        }
+        
+        .example-content {
+            width: 100%;
+            height: 100px;
+            resize: vertical;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        /* 실행 버튼 영역 */
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* 에디터 영역 */
+        .editor-container {
+            height: 300px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        #monaco-editor {
+            height: 100%;
+            width: 100%;
+        }
+        
+        /* 실행 결과 영역 */
+        .result-container {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1rem;
+            background-color: var(--background-color);
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
+
+        /* 상태 표시 */
+        .status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        
+        .status-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .status-error {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        /* 드롭다운 */
+        .dropdown {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: white;
+            margin-bottom: 1rem;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
+        <!-- 왼쪽 패널 - 설정 및 연동 -->
         <div class="left-panel">
-            <h1>백준 IDE</h1>
-            <div class="controls">
-                <div class="save-directory-section">
-                    <input type="text" id="save-directory" placeholder="저장 경로 (기본: problems)" readonly>
-                    <button onclick="openDirectoryPicker()">저장 경로 설정</button>
+            <div class="section">
+                <button class="btn btn-primary" onclick="window.open('https://www.acmicpc.net', '_blank')">백준 바로가기</button>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">저장 경로</div>
+                <div class="input-group">
+                    <input type="text" class="input-field" id="save-directory" placeholder="저장할 경로를 입력하세요">
+                    <button class="btn btn-secondary" onclick="setSaveDirectory()">불러오기</button>
                 </div>
-                <input type="text" id="problem-url" placeholder="백준 문제 URL">
-                <select id="language-select">
+            </div>
+            
+            <div class="section">
+                <div class="section-title">깃허브 레포지토리</div>
+                <input type="text" class="input-field" id="github-repo" placeholder="레포지토리 주소">
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="connectGithub()">연동하기</button>
+                    <button class="btn btn-primary" onclick="uploadToGithub()">업로드</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">티스토리</div>
+                <input type="text" class="input-field" id="tistory-blog" placeholder="블로그 주소">
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="connectTistory()">연동하기</button>
+                    <button class="btn btn-primary" onclick="uploadToTistory()">업로드</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <button class="btn btn-primary" onclick="saveAll()">저장</button>
+            </div>
+        </div>
+        
+        <!-- 중앙 패널 - 문제 입력 -->
+        <div class="center-panel">
+            <div class="section">
+                <div class="section-title">문제 번호</div>
+                <input type="text" class="input-field" id="problem-number" placeholder="문제 번호">
+            </div>
+
+            <div class="section">
+                <div class="section-title">문제 입력</div>
+                <textarea class="problem-input" id="problem-text" placeholder="여기에 문제를 붙여넣으세요"></textarea>
+            </div>
+
+            <div class="section">
+                <button class="btn btn-primary" onclick="startProblem()">문제풀이 시작</button>
+            </div>
+
+            <div class="section">
+                <select class="dropdown" id="language-select">
                     <option value="python">Python</option>
                     <option value="rust">Rust</option>
                 </select>
-                <button onclick="fetchProblem()">문제 가져오기</button>
-            </div>
-            <div class="problem-info">
-                <h2>문제 정보</h2>
-                <div id="problem-content"></div>
             </div>
         </div>
+        
+        <!-- 오른쪽 패널 - 코드 에디터 및 실행 결과 -->
         <div class="right-panel">
+            <div class="example-container">
+                <div class="example-box">
+                    <div class="section-title">예제 입력</div>
+                    <textarea class="example-content" id="example-input"></textarea>
+                </div>
+                <div class="example-box">
+                    <div class="section-title">예제 출력</div>
+                    <textarea class="example-content" id="example-output"></textarea>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="runCode()">실행</button>
+                <button class="btn btn-secondary" onclick="checkAnswer()">정답 확인</button>
+            </div>
+
             <div class="editor-container">
                 <div id="monaco-editor"></div>
             </div>
-            <div class="input-output">
-                <div class="input-section">
-                    <h3>입력</h3>
-                    <textarea id="input-area"></textarea>
-                </div>
-                <div class="output-section">
-                    <h3>출력</h3>
-                    <div id="output-area"></div>
-                </div>
-            </div>
-            <div class="button-group">
-                <button onclick="runCode()">실행</button>
-                <button onclick="checkAnswer()">정답 확인</button>
-                <button onclick="submitCode()">제출</button>
+
+            <div class="section">
+                <div class="section-title">실행 결과 <span id="execution-status" class="status"></span></div>
+                <div class="result-container" id="execution-result"></div>
             </div>
         </div>
     </div>
-    <script src="{{ url_for('static', path='/editor.js') }}"></script>
+    
+    <script>
+        // Monaco Editor 설정
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            window.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                value: '',
+                language: 'python',
+                theme: 'vs',
+                automaticLayout: true,
+                minimap: { enabled: false }
+            });
+        });
+
+        // 저장 경로 설정
+        async function setSaveDirectory() {
+            const directory = document.getElementById('save-directory').value;
+            if (!directory) {
+                alert('저장 경로를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/set-save-directory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ directory })
+                });
+                
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('저장 경로 설정 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 깃허브 연동
+        async function connectGithub() {
+            const repoUrl = document.getElementById('github-repo').value;
+            if (!repoUrl) {
+                alert('깃허브 레포지토리 주소를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/connect-github', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo_url: repoUrl })
+                });
+                
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('깃허브 연동 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 깃허브 업로드
+        async function uploadToGithub() {
+            try {
+                const response = await fetch('/upload-to-github', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('깃허브 업로드 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 티스토리 연동
+        async function connectTistory() {
+            const blogUrl = document.getElementById('tistory-blog').value;
+            if (!blogUrl) {
+                alert('티스토리 블로그 주소를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/connect-tistory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ blog_url: blogUrl })
+                });
+                
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('티스토리 연동 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 티스토리 업로드
+        async function uploadToTistory() {
+            try {
+                const response = await fetch('/upload-to-tistory', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('티스토리 업로드 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 문제 텍스트 파싱
+        function parseProblemText(text) {
+            const sections = {};
+            let currentSection = null;
+            let currentContent = [];
+            
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (['시간 제한', '문제', '입력', '출력', '예제 입력', '예제 출력'].some(section => trimmedLine.startsWith(section))) {
+                    if (currentSection) {
+                        sections[currentSection] = currentContent.join('\n').trim();
+                    }
+                    currentSection = trimmedLine;
+                    currentContent = [];
+                } else if (currentSection) {
+                    currentContent.push(line);
+                }
+            }
+            
+            if (currentSection && currentContent.length > 0) {
+                sections[currentSection] = currentContent.join('\n').trim();
+            }
+            
+            return sections;
+        }
+
+        // 문제풀이 시작
+        async function startProblem() {
+            const problemNumber = document.getElementById('problem-number').value;
+            const problemText = document.getElementById('problem-text').value;
+            const language = document.getElementById('language-select').value;
+            const saveDirectory = document.getElementById('save-directory').value;
+            
+            if (!problemNumber || !problemText) {
+                alert('문제 번호와 문제 내용을 입력해주세요.');
+                return;
+            }
+
+            if (!saveDirectory) {
+                alert('저장 경로를 설정해주세요.');
+                return;
+            }
+
+            try {
+                // 문제 텍스트 파싱
+                const sections = parseProblemText(problemText);
+                
+                // 필요한 섹션만 남기고 문제 텍스트 업데이트
+                const cleanedText = [
+                    sections['시간 제한'],
+                    sections['문제'],
+                    sections['입력'],
+                    sections['출력']
+                ].filter(Boolean).join('\n\n');
+                
+                document.getElementById('problem-text').value = cleanedText;
+
+                // 예제 입출력 처리
+                let exampleInputs = [];
+                let exampleOutputs = [];
+                let i = 1;
+                
+                while (sections[`예제 입력 ${i}`] || sections[`예제 출력 ${i}`]) {
+                    if (sections[`예제 입력 ${i}`]) {
+                        exampleInputs.push(`[예제 ${i}]\n${sections[`예제 입력 ${i}`]}`);
+                    }
+                    if (sections[`예제 출력 ${i}`]) {
+                        exampleOutputs.push(`[예제 ${i}]\n${sections[`예제 출력 ${i}`]}`);
+                    }
+                    i++;
+                }
+
+                document.getElementById('example-input').value = exampleInputs.join('\n\n');
+                document.getElementById('example-output').value = exampleOutputs.join('\n\n');
+
+                // 파일 생성 요청
+                const response = await fetch('/create-problem-files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problem_number: problemNumber,
+                        problem_text: cleanedText,
+                        example_input: exampleInputs.join('\n\n'),
+                        example_output: exampleOutputs.join('\n\n'),
+                        save_directory: saveDirectory
+                    })
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert('문제 파일이 생성되었습니다.');
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('문제 처리 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 코드 실행
+        async function runCode() {
+            const problemDir = document.getElementById('save-directory').value;
+            const language = document.getElementById('language-select').value;
+            const code = window.editor.getValue();
+
+            document.getElementById('execution-status').className = 'status';
+            document.getElementById('execution-status').textContent = '실행 중...';
+            
+            const startTime = performance.now();
+
+            try {
+                const response = await fetch('/run-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        problem_dir: problemDir,
+                        language: language,
+                        code: code
+                    })
+                });
+
+                const result = await response.json();
+                const endTime = performance.now();
+                
+                document.getElementById('execution-result').textContent = result.output || result.message;
+                
+                if (result.status === 'success') {
+                    document.getElementById('execution-status').className = 'status status-success';
+                    document.getElementById('execution-status').textContent = `성공 (${Math.round(endTime - startTime)}ms)`;
+                } else {
+                    document.getElementById('execution-status').className = 'status status-error';
+                    document.getElementById('execution-status').textContent = '실패';
+                }
+            } catch (error) {
+                document.getElementById('execution-status').className = 'status status-error';
+                document.getElementById('execution-status').textContent = '오류';
+                document.getElementById('execution-result').textContent = error.message;
+            }
+        }
+
+        // 정답 확인
+        function checkAnswer() {
+            const output = document.getElementById('execution-result').textContent;
+            const expectedOutput = document.getElementById('example-output').value;
+            
+            if (output.trim() === expectedOutput.trim()) {
+                alert('정답입니다! 🎉');
+            } else {
+                alert('틀렸습니다. 다시 시도해보세요.');
+            }
+        }
+
+        // 모든 데이터 저장
+        async function saveAll() {
+            const data = {
+                save_directory: document.getElementById('save-directory').value,
+                problem_number: document.getElementById('problem-number').value,
+                github_repo: document.getElementById('github-repo').value,
+                tistory_blog: document.getElementById('tistory-blog').value,
+                language: document.getElementById('language-select').value,
+                code: window.editor.getValue(),
+                example_input: document.getElementById('example-input').value,
+                example_output: document.getElementById('example-output').value,
+                execution_result: document.getElementById('execution-result').textContent
+            };
+
+            try {
+                const response = await fetch('/save-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                alert('저장 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        // 언어 변경
+        document.getElementById('language-select').addEventListener('change', function(e) {
+            const language = e.target.value;
+            monaco.editor.setModelLanguage(window.editor.getModel(), language);
+        });
+    </script>
 </body>
 </html>
